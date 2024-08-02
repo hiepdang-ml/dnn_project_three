@@ -18,15 +18,14 @@ class SoftDiceLoss(nn.Module):
 
 class IOU(nn.Module):
 
-    def __init__(self, cutoff_probability: float):
+    def __init__(self):
         super().__init__()
-        self.cutoff_probability: float = cutoff_probability
 
     def forward(self, logits: torch.Tensor, groundtruths: torch.Tensor) -> torch.Tensor:
         assert torch.all((groundtruths == 0) | (groundtruths == 1))
         groundtruths: torch.Tensor = groundtruths.int()
         probabilities: torch.Tensor = torch.sigmoid(input=logits)
-        predictions: torch.Tensor = (probabilities > self.cutoff_probability).int()
+        predictions: torch.Tensor = (probabilities > 0.5).int()
         intersection: torch.Tensor = predictions & groundtruths
         union: torch.Tensor = predictions | groundtruths
         return intersection.sum() / union.sum()

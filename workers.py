@@ -10,6 +10,7 @@ from datasets import BirdSoundDataset
 from metrics import SoftDiceLoss, IOU
 from plotting import plot_predictions
 
+
 class Trainer:
 
     def __init__(
@@ -33,7 +34,7 @@ class Trainer:
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=train_batch_size, shuffle=True)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=val_batch_size, shuffle=False)
         self.loss_function: nn.Module = SoftDiceLoss()
-        self.evaluation_metric: nn.Module = IOU(cutoff_probability=0.5)
+        self.evaluation_metric: nn.Module = IOU()
 
     def train(
         self, 
@@ -121,7 +122,11 @@ class Trainer:
 
         # Always save last checkpoint
         if checkpoint_path:
-            checkpoint_saver.save(self.model, filename=f'epoch{epoch}.pt')
+            checkpoint_saver.save(
+                self.model, 
+                filename=f'epoch{epoch}.pt', 
+                optimizer_states=self.optimizer.state_dict(),
+            )
 
     def evaluate(self) -> float:
         val_accumulator = Accumulator()
@@ -137,10 +142,10 @@ class Trainer:
                 assert batch_prediction.shape == batch_groundtruth.shape
                 
                 dice_loss = self.loss_function(
-                    logits=batch_prediction, target=batch_groundtruth,
+                    logits=batch_prediction, groundtruths=batch_groundtruth,
                 )
                 iou = self.evaluation_metric(
-                    logits=batch_prediction, target=batch_groundtruth,
+                    logits=batch_prediction, groundtruths=batch_groundtruth,
                 )
                 # Accumulate the val metrics
                 val_accumulator.add(
@@ -160,15 +165,16 @@ class Predictor:
         self.model: nn.Module = model.to(device=device)
         self.device: torch.device = device
         self.loss_function: nn.Module = SoftDiceLoss()
-        self.evaluation_metric: nn.Module = IOU(cutoff_probability=0.5)
+        self.evaluation_metric: nn.Module = IOU()
 
-    def predict(self, dataset: BirdSoundDataset) -> None:
+    def predict(self, dataset: BirdSoundDataset) -> float:
         self.model.eval()
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False) # sample-level method, not batch-level
 
         batch_images: List[torch.Tensor] = []
         batch_groundtruths: List[torch.Tensor] = []
         batch_predictions: List[torch.Tensor] = []
+        iou_values: List[float] = []
         metric_notes: List[str] = []
 
         with torch.no_grad():
@@ -181,14 +187,15 @@ class Predictor:
                 assert batch_prediction.shape == batch_groundtruth.shape
 
                 dice_loss = self.loss_function(
-                    logits=batch_prediction, target=batch_groundtruth,
-                )
+                    logits=batch_prediction, groundtruths=batch_groundtruth,
+                ).item()
                 iou = self.evaluation_metric(
-                    logits=batch_prediction, target=batch_groundtruth,
-                )
+                    logits=batch_prediction, groundtruths=batch_groundtruth,
+                ).item()
                 batch_images.append(batch_image)
                 batch_groundtruths.append(batch_groundtruth)
                 batch_predictions.append(batch_prediction)
+                iou_values.append(iou)
                 metric_notes.append(f'Dice Loss: {dice_loss:.4f}, IoU: {iou:.4f}')
 
             images = torch.cat(tensors=batch_images, dim=0)
@@ -202,3 +209,5 @@ class Predictor:
                 predictions=predictions, 
                 notes=metric_notes, 
             )
+
+        return sum(iou_values) / len(iou_values) * 100

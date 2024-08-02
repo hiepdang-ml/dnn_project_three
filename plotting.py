@@ -26,30 +26,36 @@ def plot_predictions(
     predictions = predictions.to(device=torch.device('cpu'))
 
     # Ensure that the plot respect the tensor's shape
-    height: int = groundtruths.shape[2]
-    width: int = groundtruths.shape[3]
-    aspect_ratio: float = width / height
 
     for idx in range(predictions.shape[0]):
         image: torch.Tensor = images[idx]
         groundtruth: torch.Tensor = groundtruths[idx]
         prediction: torch.Tensor = predictions[idx]
-        fig, axs = plt.subplots(3, 1, figsize=(10, 30))
+        fig, axs = plt.subplots(3, 1, figsize=(12, 10))
         axs[0].imshow(
             image.squeeze(dim=0),
-            aspect=aspect_ratio, origin="lower",
-            extent=[0., 1., 0., 1.],
             cmap='gray',
         )
+        axs[0].set_xticks([])
+        axs[0].set_yticks([])
         axs[0].set_title(f'$image$', fontsize=20)
         axs[1].imshow(
             groundtruth.squeeze(dim=0),
-            aspect=aspect_ratio, origin="lower",
-            extent=[0., 1., 0., 1.],
             cmap='gray',
         )
-        axs[1].set_title(f'$prediction$\n${notes[idx]}$', fontsize=20)
-        fig.subplots_adjust(left=0.01, right=0.99, bottom=0.05, top=0.85, wspace=0.05)
+        axs[1].set_xticks([])
+        axs[1].set_yticks([])
+        axs[1].set_title(f'$groundtruth$', fontsize=20)
+        prediction: torch.Tensor = (torch.sigmoid(input=prediction) > 0.5).int()
+        axs[2].imshow(
+            prediction.squeeze(dim=0),
+            cmap='gray',
+        )
+        axs[2].set_xticks([])
+        axs[2].set_yticks([])
+        axs[2].set_title(f'$prediction - {notes[idx]}$', fontsize=20)
+        fig.subplots_adjust(hspace=0.1)
+        fig.tight_layout()
         timestamp: dt.datetime = dt.datetime.now()
         fig.savefig(
             f"{os.getenv('PYTHONPATH')}/results/{timestamp.strftime('%Y%m%d%H%M%S')}"
